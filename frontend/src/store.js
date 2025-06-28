@@ -1,6 +1,7 @@
 export const initialStore = () => {
   return {
     message: "hello world",
+    user: {},
   };
 };
 
@@ -16,6 +17,17 @@ export default function storeReducer(store, action = {}) {
       return {
         ...store,
         message: action.payload,
+      };
+    case "SET_USER":
+      return {
+        ...store,
+        user: action.payload,
+      };
+    case "LOGOUT":
+      localStorage.removeItem("token");
+      return {
+        ...store,
+        user: {},
       };
   }
 }
