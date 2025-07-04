@@ -24,7 +24,7 @@ export const Navbar = () => {
             Log Out
           </button>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => navigate("/students/add")}>
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"

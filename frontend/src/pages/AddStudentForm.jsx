@@ -1,5 +1,5 @@
 "use client";
-
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
@@ -15,9 +15,12 @@ import {
 import { X } from "../components/Icons";
 import { Alert, AlertDescription } from "../components/Alert";
 
-export const AddStudentForm = ({ onClose, onStudentAdded }) => {
+const API_URL = import.meta.env.VITE_API_URL;
+
+export const AddStudentForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -26,28 +29,32 @@ export const AddStudentForm = ({ onClose, onStudentAdded }) => {
 
     const formData = new FormData(event.currentTarget);
     const studentData = {
-      _id: Date.now().toString(),
       name: formData.get("name"),
       date_joined: formData.get("date_joined"),
       work_description: formData.get("work_description") || null,
       created_at: new Date().toISOString(),
     };
 
+    const token = localStorage.getItem("token");
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const existingStudents = JSON.parse(
-        localStorage.getItem("demo_students") || "[]"
-      );
-      const updatedStudents = [studentData, ...existingStudents];
-      localStorage.setItem("demo_students", JSON.stringify(updatedStudents));
-
-      onStudentAdded();
+      const response = await fetch(`${API_URL}/students`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(studentData),
+      });
+      const data = await response.json();
+      if (data.status === "success") {
+        navigate("/dashboard");
+      } else {
+        setError(data.message || "Failed to add student.");
+      }
     } catch (error) {
       setError("Failed to add student. Please try again.", error);
-    } finally {
-      setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
   return (
@@ -64,7 +71,7 @@ export const AddStudentForm = ({ onClose, onStudentAdded }) => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={onClose}
+              onClick={() => navigate("/dashboard")}
               className="h-8 w-8 p-0"
             >
               <X className="h-4 w-4" />
@@ -117,7 +124,7 @@ export const AddStudentForm = ({ onClose, onStudentAdded }) => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={onClose}
+                onClick={() => navigate("/dashboard")}
                 className="flex-1 bg-transparent"
               >
                 Cancel
@@ -131,4 +138,4 @@ export const AddStudentForm = ({ onClose, onStudentAdded }) => {
       </Card>
     </div>
   );
-}
+};

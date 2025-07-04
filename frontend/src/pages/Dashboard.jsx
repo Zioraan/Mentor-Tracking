@@ -16,55 +16,54 @@ import {
 
 export const Dashboard = () => {
   const [students, setStudents] = useState([]);
+  const [sessions, setSessions] = useState([]); // New: sessions state
   const [showAddForm, setShowAddForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch students (unchanged, for StudentList)
   const fetchStudents = async () => {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const mockStudents = [
-        {
-          _id: "1",
-          name: "Alice Johnson",
-          date_joined: "2024-01-15",
-          work_description:
-            "Worked on React components and state management. Built a todo list application with local storage.",
-          created_at: "2025-01-15T10:00:00Z",
-        },
-        {
-          _id: "2",
-          name: "Bob Smith",
-          date_joined: "2025-01-16",
-          work_description:
-            "Focused on Python fundamentals and data structures. Implemented sorting algorithms.",
-          created_at: "2025-01-16T10:00:00Z",
-        },
-        {
-          _id: "3",
-          name: "Carol Davis",
-          date_joined: "2024-01-17",
-          work_description: null,
-          created_at: "2024-01-17T10:00:00Z",
-        },
-      ];
-
-      const existingStudents = JSON.parse(
-        localStorage.getItem("demo_students") || "[]"
-      );
-      const allStudents =
-        existingStudents.length > 0 ? existingStudents : mockStudents;
-
-      setStudents(allStudents);
+      // Fetch students from your backend API here
+      // Example:
+      // const token = localStorage.getItem("token");
+      // const response = await fetch(`${API_URL}/students`, {
+      //   headers: { Authorization: `Bearer ${token}` },
+      // });
+      // const data = await response.json();
+      // setStudents(data);
+      // For now, just clear students if fetch fails
+      setStudents([]);
     } catch (error) {
       console.error("Failed to fetch students:", error);
+      setStudents([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch sessions from backend
+  const fetchSessions = async () => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem("token");
+      const API_URL = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${API_URL}/sessions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to fetch sessions");
+      const data = await response.json();
+      setSessions(data);
+    } catch (error) {
+      console.error("Failed to fetch sessions:", error);
+      setSessions([]);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStudents();
+    fetchStudents(); // for StudentList
+    fetchSessions(); // for dashboard stats
   }, []);
 
   const handleStudentAdded = () => {
@@ -72,17 +71,59 @@ export const Dashboard = () => {
     fetchStudents();
   };
 
-  const totalSessions = students.length;
-  const thisWeek = students.filter((student) => {
-    const studentDate = new Date(student.date_joined);
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return studentDate >= weekAgo;
-  }).length;
+  // Dashboard stats based on sessions, not students
+  const MENTORING_DAYS = [2, 4, 6]; // Tuesday, Thursday, Saturday
+  const IMPLEMENTATION_DATE = new Date("2025-07-01");
+  const today = new Date();
+  const weekAgo = new Date(today);
+  weekAgo.setDate(today.getDate() - 7);
 
-  const withWorkDescription = students.filter(
-    (student) => student.work_description
-  ).length;
+  // Helper: get session date as Date object
+  const getSessionDate = (session) => new Date(session.date);
+
+  // Unique session dates for all time (after implementation date, on mentoring days)
+  const sessionDates = new Set(
+    sessions
+      .map((session) => {
+        const date = getSessionDate(session);
+        return MENTORING_DAYS.includes(date.getDay()) && date >= IMPLEMENTATION_DATE
+          ? date.toISOString().split("T")[0]
+          : null;
+      })
+      .filter(Boolean)
+  );
+  const totalSessions = sessionDates.size;
+
+  // Unique session dates for the last 7 days (after implementation date, on mentoring days)
+  const sessionDatesThisWeek = new Set(
+    sessions
+      .map((session) => {
+        const date = getSessionDate(session);
+        return (
+          MENTORING_DAYS.includes(date.getDay()) &&
+          date >= weekAgo &&
+          date >= IMPLEMENTATION_DATE
+        )
+          ? date.toISOString().split("T")[0]
+          : null;
+      })
+      .filter(Boolean)
+  );
+  const thisWeek = sessionDatesThisWeek.size;
+
+  // Sessions with work details (notes) on mentoring days, unique by date, after implementation date
+  const sessionDatesWithWork = new Set(
+    sessions
+      .filter((session) => session.notes && session.notes.trim())
+      .map((session) => {
+        const date = getSessionDate(session);
+        return MENTORING_DAYS.includes(date.getDay()) && date >= IMPLEMENTATION_DATE
+          ? date.toISOString().split("T")[0]
+          : null;
+      })
+      .filter(Boolean)
+  );
+  const withWorkDescription = sessionDatesWithWork.size;
 
   return (
     <div className="min-h-screen bg-gray-50">
