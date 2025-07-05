@@ -16,8 +16,16 @@ FLASK_APP_KEY = os.getenv("FLASK_APP_KEY")
 if not FLASK_APP_KEY:
     raise ValueError("FLASK_APP_KEY is not set in the environment variables.")
 MONGO_URI = os.getenv("MONGO_URI")
-client = MongoClient(MONGO_URI)
-db = client["4Geeks"]
+
+try:
+    client = MongoClient(MONGO_URI)
+    db = client["4Geeks"]
+    users_collection = db.users
+    students_collection = db.students
+    sessions_collection = db.sessions  # New sessions collection
+    print("Connected to MongoDB successfully")
+except Exception as e:
+    print(f"Failed to connect to MongoDB: {e}")
 
 @app.route('/')
 def home():
@@ -95,6 +103,109 @@ def authorized():
     except jwt.InvalidTokenError:
         return jsonify(status="error", message="Invalid token"), 401    
 
+@app.route("/api/students", methods=["GET"])
+def get_students():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify(status="error", message="Missing or invalid token"), 401
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
+        user = db.Users.find_one({"email": payload["email"]})
+        if not user:
+            return jsonify(status="error", message="User not found"), 404
+        if not user["is_authorized"]:
+            return jsonify(status="error", message="User is not yet authorized"), 403
+    except jwt.ExpiredSignatureError:
+        return jsonify(status="error", message="Token expired"), 401
+    except jwt.InvalidTokenError:
+        return jsonify(status="error", message="Invalid token"), 401
+    students = list(students_collection.find())
+    for student in students:
+        student["_id"] = str(student["_id"])
+    return jsonify(students)
+
+@app.route("/api/students", methods=["POST"])
+def add_student():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify(status="error", message="Missing or invalid token"), 401
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
+        user = db.Users.find_one({"email": payload["email"]})
+        if not user or not user["is_authorized"]:
+            return jsonify(status="error", message="Unauthorized"), 403
+    except jwt.ExpiredSignatureError:
+        return jsonify(status="error", message="Token expired"), 401
+    except jwt.InvalidTokenError:
+        return jsonify(status="error", message="Invalid token"), 401
+
+    data = request.get_json()
+    if not data.get("name") or not data.get("date_joined"):
+        return jsonify(status="error", message="Missing required fields"), 400
+
+    student = {
+        "name": data["name"],
+        "date_joined": data["date_joined"],
+        "work_description": data.get("work_description"),
+        "created_at": datetime.datetime.utcnow().isoformat()
+    }
+    result = students_collection.insert_one(student)
+    student["_id"] = str(result.inserted_id)
+    return jsonify(status="success", student=student), 201
+
+@app.route("/api/sessions", methods=["GET"])
+def get_sessions():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify(status="error", message="Missing or invalid token"), 401
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
+        user = db.Users.find_one({"email": payload["email"]})
+        if not user or not user["is_authorized"]:
+            return jsonify(status="error", message="Unauthorized"), 403
+    except jwt.ExpiredSignatureError:
+        return jsonify(status="error", message="Token expired"), 401
+    except jwt.InvalidTokenError:
+        return jsonify(status="error", message="Invalid token"), 401
+
+    # Optional: filter by date, mentoring days, etc. via query params
+    sessions = list(sessions_collection.find())
+    for session in sessions:
+        session["_id"] = str(session["_id"])
+    return jsonify(sessions)
+
+@app.route("/api/sessions", methods=["POST"])
+def add_session():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify(status="error", message="Missing or invalid token"), 401
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
+        user = db.Users.find_one({"email": payload["email"]})
+        if not user or not user["is_authorized"]:
+            return jsonify(status="error", message="Unauthorized"), 403
+    except jwt.ExpiredSignatureError:
+        return jsonify(status="error", message="Token expired"), 401
+    except jwt.InvalidTokenError:
+        return jsonify(status="error", message="Invalid token"), 401
+
+    data = request.get_json()
+    if not data.get("date") or not data.get("student_id"):
+        return jsonify(status="error", message="Missing required fields"), 400
+
+    session = {
+        "date": data["date"],  # ISO date string
+        "student_id": data["student_id"],
+        "notes": data.get("notes"),
+        "created_at": datetime.datetime.utcnow().isoformat()
+    }
+    result = sessions_collection.insert_one(session)
+    session["_id"] = str(result.inserted_id)
+    return jsonify(status="success", session=session), 201
 
 if __name__ == '__main__':
     app.run(debug=True)

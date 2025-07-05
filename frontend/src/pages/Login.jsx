@@ -19,7 +19,7 @@ export const Login = () => {
     if (data.status === "success" && data.token) {
       localStorage.setItem("token", data.token);
       setFormData({ email: "", password: "" });
-      navigate("/");
+      navigate("/dashboard");
     } else {
       alert("Login failed: " + data.message);
       return;
