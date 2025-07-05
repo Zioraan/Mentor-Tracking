@@ -3,209 +3,193 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
-import os
-import jwt
-import datetime
+from bson import ObjectId
+import os, jwt, datetime
 
-load_dotenv()  
-
+load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
 FLASK_APP_KEY = os.getenv("FLASK_APP_KEY")
-if not FLASK_APP_KEY:
-    raise ValueError("FLASK_APP_KEY is not set in the environment variables.")
 MONGO_URI = os.getenv("MONGO_URI")
+if not FLASK_APP_KEY or not MONGO_URI:
+    raise ValueError("Missing FLASK_APP_KEY or MONGO_URI in environment.")
 
-try:
-    client = MongoClient(MONGO_URI)
-    db = client["4Geeks"]
-    users_collection = db.users
-    students_collection = db.students
-    sessions_collection = db.sessions  # New sessions collection
-    print("Connected to MongoDB successfully")
-except Exception as e:
-    print(f"Failed to connect to MongoDB: {e}")
+client = MongoClient(MONGO_URI)
+db = client["4Geeks"]
+users = db.users
+students = db.students
+sessions = db.sessions
 
-@app.route('/')
+
+@app.route("/")
 def home():
     return "Flask backend is running!"
 
-@app.route("/api/test-mongo")
-def test_mongo():
+
+# --- Auth Helpers ---
+def get_user_from_token():
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None, (jsonify(status="error", message="Missing or invalid token"), 401)
     try:
-        collections = db.list_collection_names()
-        return jsonify(status="success", collections=collections), 200
-    except Exception as e:
-        return jsonify(status="error", message=str(e)), 500
-    
+        token = auth.split()[1]
+        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
+        user = users.find_one({"email": payload["email"]})
+        if not user or not user.get("is_authorized"):
+            return None, (jsonify(status="error", message="Unauthorized"), 403)
+        return user, None
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None, (jsonify(status="error", message="Invalid or expired token"), 401)
+
+
+# --- Auth Routes ---
 @app.route("/api/signup", methods=["POST"])
 def signup():
     data = request.get_json()
-    email = data.get("email")
-    password = data.get("password")
-    name = data.get("name")
-
-    if not email or not password or not name:
+    if not all(data.get(k) for k in ("email", "password", "name")):
         return jsonify(status="error", message="Missing required fields"), 400
-    
-    if db.users.find_one({"email": email}):
+    if users.find_one({"email": data["email"]}):
         return jsonify(status="error", message="Email already exists"), 400
-    
-    hashed_password = generate_password_hash(password)
     user = {
-        "email": email,
-        "password": hashed_password,
-        "name": name,
-        "is_authorized": False
+        "email": data["email"],
+        "password": generate_password_hash(data["password"]),
+        "name": data["name"],
+        "is_authorized": False,
     }
-    db.Users.insert_one(user)
+    users.insert_one(user)
     return jsonify(status="success", message="User created successfully"), 201
+
 
 @app.route("/api/login", methods=["POST"])
 def login():
-    data= request.get_json()
-    email = data.get("email")
-    password = data.get("password")
-
-    user = db.Users.find_one({"email": email})
-    if not user or not check_password_hash(user["password"], password):
+    data = request.get_json()
+    user = users.find_one({"email": data.get("email")})
+    if not user or not check_password_hash(user["password"], data.get("password")):
         return jsonify(status="error", message="Invalid email or password"), 401
-    
     if not user["is_authorized"]:
         return jsonify(status="error", message="User is not yet authorized"), 403
-    
     payload = {
         "email": user["email"],
         "name": user["name"],
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24),
     }
     token = jwt.encode(payload, FLASK_APP_KEY, algorithm="HS256")
-    
-    return jsonify(status="success", message="Login successful", token=token, user={"email": user["email"], "name": user["name"]}), 200
+    return (
+        jsonify(
+            status="success",
+            message="Login successful",
+            token=token,
+            user={"email": user["email"], "name": user["name"]},
+        ),
+        200,
+    )
+
 
 @app.route("/api/authorized", methods=["GET"])
 def authorized():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify(status="error", message="Missing or invalid token"), 401
-    
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
-        user = db.Users.find_one({"email": payload["email"]})
-        if not user:
-            return jsonify(status="error", message="User not found"), 404
-        if user["is_authorized"]:
-            return jsonify(status="success", message="User is authorized", user={"email": user["email"], "name": user["name"]}), 200
-    except jwt.ExpiredSignatureError:
-        return jsonify(status="error", message="Token expired"), 401
-    except jwt.InvalidTokenError:
-        return jsonify(status="error", message="Invalid token"), 401    
+    user, err = get_user_from_token()
+    if err:
+        return err
+    return (
+        jsonify(
+            status="success",
+            message="User is authorized",
+            user={"email": user["email"], "name": user["name"]},
+        ),
+        200,
+    )
 
+
+# --- Student Routes ---
 @app.route("/api/students", methods=["GET"])
 def get_students():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify(status="error", message="Missing or invalid token"), 401
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
-        user = db.Users.find_one({"email": payload["email"]})
-        if not user:
-            return jsonify(status="error", message="User not found"), 404
-        if not user["is_authorized"]:
-            return jsonify(status="error", message="User is not yet authorized"), 403
-    except jwt.ExpiredSignatureError:
-        return jsonify(status="error", message="Token expired"), 401
-    except jwt.InvalidTokenError:
-        return jsonify(status="error", message="Invalid token"), 401
-    students = list(students_collection.find())
-    for student in students:
-        student["_id"] = str(student["_id"])
-    return jsonify(students)
+    user, err = get_user_from_token()
+    if err:
+        return err
+    result = list(students.find())
+    for s in result:
+        s["_id"] = str(s["_id"])
+    return jsonify(result)
+
 
 @app.route("/api/students", methods=["POST"])
 def add_student():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify(status="error", message="Missing or invalid token"), 401
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
-        user = db.Users.find_one({"email": payload["email"]})
-        if not user or not user["is_authorized"]:
-            return jsonify(status="error", message="Unauthorized"), 403
-    except jwt.ExpiredSignatureError:
-        return jsonify(status="error", message="Token expired"), 401
-    except jwt.InvalidTokenError:
-        return jsonify(status="error", message="Invalid token"), 401
-
+    user, err = get_user_from_token()
+    if err:
+        return err
     data = request.get_json()
     if not data.get("name") or not data.get("date_joined"):
         return jsonify(status="error", message="Missing required fields"), 400
-
     student = {
         "name": data["name"],
         "date_joined": data["date_joined"],
         "work_description": data.get("work_description"),
-        "created_at": datetime.datetime.utcnow().isoformat()
+        "created_at": datetime.datetime.utcnow().isoformat(),
     }
-    result = students_collection.insert_one(student)
+    result = students.insert_one(student)
     student["_id"] = str(result.inserted_id)
     return jsonify(status="success", student=student), 201
 
+
+@app.route("/api/students/<student_id>", methods=["PUT"])
+def update_student(student_id):
+    user, err = get_user_from_token()
+    if err:
+        return err
+    data = request.get_json()
+    update_fields = {
+        k: v
+        for k, v in data.items()
+        if k in ["name", "date_joined", "work_description"]
+    }
+    result = students.update_one({"_id": ObjectId(student_id)}, {"$set": update_fields})
+    if not result.matched_count:
+        return jsonify(status="error", message="Student not found"), 404
+    return jsonify(status="success"), 200
+
+
+@app.route("/api/students/<student_id>", methods=["DELETE"])
+def delete_student(student_id):
+    user, err = get_user_from_token()
+    if err:
+        return err
+    result = students.delete_one({"_id": ObjectId(student_id)})
+    if not result.deleted_count:
+        return jsonify(status="error", message="Student not found"), 404
+    return jsonify(status="success"), 200
+
+
+# --- Session Routes ---
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify(status="error", message="Missing or invalid token"), 401
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
-        user = db.Users.find_one({"email": payload["email"]})
-        if not user or not user["is_authorized"]:
-            return jsonify(status="error", message="Unauthorized"), 403
-    except jwt.ExpiredSignatureError:
-        return jsonify(status="error", message="Token expired"), 401
-    except jwt.InvalidTokenError:
-        return jsonify(status="error", message="Invalid token"), 401
+    user, err = get_user_from_token()
+    if err:
+        return err
+    result = list(sessions.find())
+    for s in result:
+        s["_id"] = str(s["_id"])
+    return jsonify(result)
 
-    # Optional: filter by date, mentoring days, etc. via query params
-    sessions = list(sessions_collection.find())
-    for session in sessions:
-        session["_id"] = str(session["_id"])
-    return jsonify(sessions)
 
 @app.route("/api/sessions", methods=["POST"])
 def add_session():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify(status="error", message="Missing or invalid token"), 401
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, FLASK_APP_KEY, algorithms=["HS256"])
-        user = db.Users.find_one({"email": payload["email"]})
-        if not user or not user["is_authorized"]:
-            return jsonify(status="error", message="Unauthorized"), 403
-    except jwt.ExpiredSignatureError:
-        return jsonify(status="error", message="Token expired"), 401
-    except jwt.InvalidTokenError:
-        return jsonify(status="error", message="Invalid token"), 401
-
+    user, err = get_user_from_token()
+    if err:
+        return err
     data = request.get_json()
     if not data.get("date") or not data.get("student_id"):
         return jsonify(status="error", message="Missing required fields"), 400
-
     session = {
-        "date": data["date"],  # ISO date string
+        "date": data["date"],
         "student_id": data["student_id"],
         "notes": data.get("notes"),
-        "created_at": datetime.datetime.utcnow().isoformat()
+        "created_at": datetime.datetime.utcnow().isoformat(),
     }
-    result = sessions_collection.insert_one(session)
+    result = sessions.insert_one(session)
     session["_id"] = str(result.inserted_id)
     return jsonify(status="success", session=session), 201
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app.run(debug=True)
