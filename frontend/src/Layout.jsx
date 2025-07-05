@@ -57,7 +57,7 @@ export const Layout = () => {
   return (
     <>
       <Navbar />
-      <div className="pt-16 ml-[24%]">
+      <div className="pt-16">
         <Outlet />
       </div>
     </>
