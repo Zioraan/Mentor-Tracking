@@ -1,5 +1,4 @@
 "use client";
-import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
@@ -14,13 +13,14 @@ import {
 } from "../components/Card";
 import { X } from "../components/Icons";
 import { Alert, AlertDescription } from "../components/Alert";
+import useGlobalReducer from "../../hooks/useGlobalReducer";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-export const AddStudentForm = () => {
+export const AddStudentForm = ({ onSuccess, onCancel }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
+  const { store } = useGlobalReducer();
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -30,8 +30,14 @@ export const AddStudentForm = () => {
     const formData = new FormData(event.currentTarget);
     const studentData = {
       name: formData.get("name"),
-      date_joined: formData.get("date_joined"),
-      work_description: formData.get("work_description") || null,
+      first_session: formData.get("date_joined"),
+      sessions: [
+        {
+          work_description: formData.get("work_description"),
+          date: formData.get("date_joined"),
+          added_by: store.user.name,
+        },
+      ],
       created_at: new Date().toISOString(),
     };
 
@@ -47,12 +53,12 @@ export const AddStudentForm = () => {
       });
       const data = await response.json();
       if (data.status === "success") {
-        navigate("/dashboard");
+        if (onSuccess) onSuccess();
       } else {
         setError(data.message || "Failed to add student.");
       }
-    } catch (error) {
-      setError("Failed to add student. Please try again.", error);
+    } catch {
+      setError("Failed to add student. Please try again.");
     }
     setIsLoading(false);
   };
@@ -71,7 +77,7 @@ export const AddStudentForm = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/dashboard")}
+              onClick={onCancel}
               className="h-8 w-8 p-0"
             >
               <X className="h-4 w-4" />
@@ -124,7 +130,7 @@ export const AddStudentForm = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate("/dashboard")}
+                onClick={onCancel}
                 className="flex-1 bg-transparent"
               >
                 Cancel

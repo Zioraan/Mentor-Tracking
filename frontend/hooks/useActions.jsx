@@ -80,11 +80,12 @@ export const useActions = () => {
       },
     });
     const data = await response.json();
+    console.log("Auth response:", data);
     if (data.status === "success") {
       console.log("Authentication successful:", data.message);
       dispatch({
         type: "SET_USER",
-        payload: { email: data.user.email, name: data.user.name },
+        payload: data.user,
       });
       return true;
     } else {

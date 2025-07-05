@@ -1,11 +1,13 @@
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { Navbar } from "./components/Navbar";
 import React, { useEffect, useState } from "react";
+import useGlobalReducer from "../hooks/useGlobalReducer";
 
 export const Layout = () => {
   const navigate = useNavigate();
   const [checked, setChecked] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { dispatch } = useGlobalReducer();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -24,6 +26,10 @@ export const Layout = () => {
       .then((data) => {
         if (data.status === "success") {
           setChecked(true);
+          dispatch({
+            type: "SET_USER",
+            payload: data.user,
+          });
         } else {
           setChecked(false);
           localStorage.removeItem("token");

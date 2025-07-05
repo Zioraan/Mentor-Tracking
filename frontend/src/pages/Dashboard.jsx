@@ -71,6 +71,20 @@ export const Dashboard = () => {
     fetchStudents();
   };
 
+  // Flatten sessions collection for stats (always flatten for new format)
+  const flattenedSessions = Array.isArray(sessions)
+    ? sessions.flatMap((sessionGroup) =>
+        (Array.isArray(sessionGroup.students) ? sessionGroup.students : []).map(
+          (studentSession) => ({
+            date: sessionGroup.date,
+            name: studentSession.name,
+            notes:
+              studentSession.work_description || studentSession.notes || "",
+          })
+        )
+      )
+    : [];
+
   // Dashboard stats based on sessions, not students
   const MENTORING_DAYS = [2, 4, 6]; // Tuesday, Thursday, Saturday
   const IMPLEMENTATION_DATE = new Date("2025-07-01");
@@ -81,70 +95,62 @@ export const Dashboard = () => {
   // Helper: get session date as Date object
   const getSessionDate = (session) => new Date(session.date);
 
-  // Unique session dates for all time (after implementation date, on mentoring days)
-  const sessionDates = new Set(
-    sessions
-      .map((session) => {
-        const date = getSessionDate(session);
-        return MENTORING_DAYS.includes(date.getDay()) && date >= IMPLEMENTATION_DATE
-          ? date.toISOString().split("T")[0]
-          : null;
-      })
-      .filter(Boolean)
-  );
-  const totalSessions = sessionDates.size;
+  // Helper: get day of week from date string (YYYY-MM-DD)
+  const getDayFromDateString = (dateString) => {
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day).getDay();
+  };
 
-  // Unique session dates for the last 7 days (after implementation date, on mentoring days)
-  const sessionDatesThisWeek = new Set(
-    sessions
-      .map((session) => {
-        const date = getSessionDate(session);
-        return (
-          MENTORING_DAYS.includes(date.getDay()) &&
+  // Sessions this week: sum of students in sessions for the last 7 days on mentoring days
+  const thisWeek = Array.isArray(sessions)
+    ? sessions.reduce((acc, sessionGroup) => {
+        const dateString = sessionGroup.date;
+        const [year, month, day] = dateString.split("-").map(Number);
+        const date = new Date(year, month - 1, day);
+        if (
+          MENTORING_DAYS.includes(getDayFromDateString(dateString)) &&
           date >= weekAgo &&
           date >= IMPLEMENTATION_DATE
-        )
-          ? date.toISOString().split("T")[0]
-          : null;
-      })
-      .filter(Boolean)
-  );
-  const thisWeek = sessionDatesThisWeek.size;
+        ) {
+          return (
+            acc +
+            (Array.isArray(sessionGroup.students)
+              ? sessionGroup.students.length
+              : 0)
+          );
+        }
+        return acc;
+      }, 0)
+    : 0;
 
-  // Sessions with work details (notes) on mentoring days, unique by date, after implementation date
-  const sessionDatesWithWork = new Set(
-    sessions
-      .filter((session) => session.notes && session.notes.trim())
-      .map((session) => {
-        const date = getSessionDate(session);
-        return MENTORING_DAYS.includes(date.getDay()) && date >= IMPLEMENTATION_DATE
-          ? date.toISOString().split("T")[0]
-          : null;
-      })
-      .filter(Boolean)
-  );
-  const withWorkDescription = sessionDatesWithWork.size;
+  // Sessions with work details: sum of students with non-empty work_description on mentoring days, after implementation date
+  const withWorkDescription = Array.isArray(sessions)
+    ? sessions.reduce((acc, sessionGroup) => {
+        const dateString = sessionGroup.date;
+        const [year, month, day] = dateString.split("-").map(Number);
+        const date = new Date(year, month - 1, day);
+        if (
+          MENTORING_DAYS.includes(getDayFromDateString(dateString)) &&
+          date >= IMPLEMENTATION_DATE
+        ) {
+          const count = Array.isArray(sessionGroup.students)
+            ? sessionGroup.students.filter(
+                (student) =>
+                  typeof student.work_description === "string" &&
+                  student.work_description.trim() !== ""
+              ).length
+            : 0;
+          return acc + count;
+        }
+        return acc;
+      }, 0)
+    : 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Sessions?
-              </CardTitle>
-              <Users className="h-4 w-4 text-gray-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalSessions}</div>
-              <p className="text-xs text-gray-500">
-                All time mentoring sessions
-              </p>
-            </CardContent>
-          </Card>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">This Week</CardTitle>

@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
 import useGlobalReducer from "../../hooks/useGlobalReducer";
-import { Button } from "./Button";
 
 export const Navbar = () => {
   const navigate = useNavigate();
@@ -24,23 +23,6 @@ export const Navbar = () => {
             Log Out
           </button>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => navigate("/students/add")}>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="size-6"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 4.5v15m7.5-7.5h-15"
-            />
-          </svg>
-          Add Student
-        </Button>
       </div>
     </nav>
   );
