@@ -119,16 +119,29 @@ def add_student():
     if err:
         return err
     data = request.get_json()
-    if not data.get("name") or not data.get("date_joined"):
+    if not data.get("name") or not data.get("first_session"):
         return jsonify(status="error", message="Missing required fields"), 400
     student = {
         "name": data["name"],
-        "date_joined": data["date_joined"],
-        "work_description": data.get("work_description"),
+        "first_session": data["first_session"],
+        "sessions": data.get("sessions", []),
         "created_at": datetime.datetime.utcnow().isoformat(),
     }
     result = students.insert_one(student)
     student["_id"] = str(result.inserted_id)
+
+    # Add to sessions collection
+    session_date = student["first_session"]
+    session_student = {
+        "name": student["name"],
+        "work_description": student["sessions"][0]["work_description"] if student["sessions"] else "",
+        "added_by": student["sessions"][0]["added_by"] if student["sessions"] else "",
+    }
+    sessions.update_one(
+        {"date": session_date},
+        {"$push": {"students": session_student}},
+        upsert=True
+    )
     return jsonify(status="success", student=student), 201
 
 
@@ -141,11 +154,36 @@ def update_student(student_id):
     update_fields = {
         k: v
         for k, v in data.items()
-        if k in ["name", "date_joined", "work_description"]
+        if k in ["name", "first_session", "sessions"]
     }
+    # Get the old student name before update
+    old_student = students.find_one({"_id": ObjectId(student_id)})
+    old_name = old_student["name"] if old_student else None
     result = students.update_one({"_id": ObjectId(student_id)}, {"$set": update_fields})
     if not result.matched_count:
         return jsonify(status="error", message="Student not found"), 404
+    # If sessions updated, update sessions collection (only if a new session is added)
+    if "sessions" in update_fields and update_fields["sessions"]:
+        # Check if a new session was added (by comparing lengths)
+        if old_student and len(update_fields["sessions"]) > len(old_student.get("sessions", [])):
+            latest_session = update_fields["sessions"][-1]
+            session_student = {
+                "name": data["name"],
+                "work_description": latest_session.get("work_description", ""),
+                "added_by": latest_session.get("added_by", ""),
+            }
+            sessions.update_one(
+                {"date": latest_session["date"]},
+                {"$push": {"students": session_student}},
+                upsert=True
+            )
+    # If name changed, update all session entries with old name (do not push new entry)
+    if old_name and "name" in update_fields and update_fields["name"] != old_name:
+        sessions.update_many(
+            {"students.name": old_name},
+            {"$set": {"students.$[elem].name": update_fields["name"]}},
+            array_filters=[{"elem.name": old_name}]
+        )
     return jsonify(status="success"), 200
 
 
@@ -154,10 +192,31 @@ def delete_student(student_id):
     user, err = get_user_from_token()
     if err:
         return err
+    # Get the student name before deleting
+    student = students.find_one({"_id": ObjectId(student_id)})
+    student_name = student["name"] if student else None
     result = students.delete_one({"_id": ObjectId(student_id)})
     if not result.deleted_count:
         return jsonify(status="error", message="Student not found"), 404
+    # Remove student from all sessions
+    if student_name:
+        sessions.update_many(
+            {},
+            {"$pull": {"students": {"name": student_name}}}
+        )
     return jsonify(status="success"), 200
+
+
+@app.route("/api/students/<student_id>", methods=["GET"])
+def get_student(student_id):
+    user, err = get_user_from_token()
+    if err:
+        return err
+    student = students.find_one({"_id": ObjectId(student_id)})
+    if not student:
+        return jsonify(status="error", message="Student not found"), 404
+    student["_id"] = str(student["_id"])
+    return jsonify(status="success", student=student), 200
 
 
 # --- Session Routes ---

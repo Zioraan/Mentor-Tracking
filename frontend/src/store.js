@@ -1,7 +1,7 @@
 export const initialStore = () => {
   return {
     message: "hello world",
-    user: {},
+    user: null,
   };
 };
 
