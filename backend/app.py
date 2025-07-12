@@ -27,7 +27,6 @@ def home():
     return "Flask backend is running!"
 
 
-# --- Auth Helpers ---
 def get_user_from_token():
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -38,12 +37,12 @@ def get_user_from_token():
         user = users.find_one({"email": payload["email"]})
         if not user or not user.get("is_authorized"):
             return None, (jsonify(status="error", message="Unauthorized"), 403)
+        user["is_admin"] = payload.get("is_admin", False)
         return user, None
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         return None, (jsonify(status="error", message="Invalid or expired token"), 401)
 
 
-# --- Auth Routes ---
 @app.route("/api/signup", methods=["POST"])
 def signup():
     data = request.get_json()
@@ -72,6 +71,7 @@ def login():
     payload = {
         "email": user["email"],
         "name": user["name"],
+        "is_admin": user.get("is_admin", False),
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24),
     }
     token = jwt.encode(payload, FLASK_APP_KEY, algorithm="HS256")
@@ -101,7 +101,6 @@ def authorized():
     )
 
 
-# --- Student Routes ---
 @app.route("/api/students", methods=["GET"])
 def get_students():
     user, err = get_user_from_token()
@@ -130,7 +129,6 @@ def add_student():
     result = students.insert_one(student)
     student["_id"] = str(result.inserted_id)
 
-    # Add to sessions collection
     session_date = student["first_session"]
     session_student = {
         "name": student["name"],
@@ -156,15 +154,12 @@ def update_student(student_id):
         for k, v in data.items()
         if k in ["name", "first_session", "sessions"]
     }
-    # Get the old student name before update
     old_student = students.find_one({"_id": ObjectId(student_id)})
     old_name = old_student["name"] if old_student else None
     result = students.update_one({"_id": ObjectId(student_id)}, {"$set": update_fields})
     if not result.matched_count:
         return jsonify(status="error", message="Student not found"), 404
-    # If sessions updated, update sessions collection (only if a new session is added)
     if "sessions" in update_fields and update_fields["sessions"]:
-        # Check if a new session was added (by comparing lengths)
         if old_student and len(update_fields["sessions"]) > len(old_student.get("sessions", [])):
             latest_session = update_fields["sessions"][-1]
             session_student = {
@@ -177,7 +172,6 @@ def update_student(student_id):
                 {"$push": {"students": session_student}},
                 upsert=True
             )
-    # If name changed, update all session entries with old name (do not push new entry)
     if old_name and "name" in update_fields and update_fields["name"] != old_name:
         sessions.update_many(
             {"students.name": old_name},
@@ -192,13 +186,11 @@ def delete_student(student_id):
     user, err = get_user_from_token()
     if err:
         return err
-    # Get the student name before deleting
     student = students.find_one({"_id": ObjectId(student_id)})
     student_name = student["name"] if student else None
     result = students.delete_one({"_id": ObjectId(student_id)})
     if not result.deleted_count:
         return jsonify(status="error", message="Student not found"), 404
-    # Remove student from all sessions
     if student_name:
         sessions.update_many(
             {},
@@ -219,7 +211,6 @@ def get_student(student_id):
     return jsonify(status="success", student=student), 200
 
 
-# --- Session Routes ---
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
     user, err = get_user_from_token()
@@ -248,6 +239,54 @@ def add_session():
     result = sessions.insert_one(session)
     session["_id"] = str(result.inserted_id)
     return jsonify(status="success", session=session), 201
+
+
+@app.route("/api/users", methods=["GET"])
+def get_users():
+    user, err = get_user_from_token()
+    if err:
+        return err
+    if not user.get("is_admin", False):
+        return jsonify(status="error", message="Forbidden: Admins only"), 403
+    result = list(users.find({}, {"password": 0}))
+    for u in result:
+        u["_id"] = str(u["_id"])
+    return jsonify(users=result), 200
+
+
+@app.route("/api/users/<user_id>", methods=["PUT"])
+def update_user(user_id):
+    user, err = get_user_from_token()
+    if err:
+        return err
+    if not user.get("is_admin", False):
+        return jsonify(status="error", message="Forbidden: Admins only"), 403
+    data = request.get_json()
+    update_fields = {}
+    for field in ["is_authorized", "is_admin"]:
+        if field in data:
+            update_fields[field] = data[field]
+    if not update_fields:
+        return jsonify(status="error", message="No valid fields to update"), 400
+    result = users.update_one({"_id": ObjectId(user_id)}, {"$set": update_fields})
+    if not result.matched_count:
+        return jsonify(status="error", message="User not found"), 404
+    return jsonify(status="success"), 200
+
+
+@app.route("/api/users/<user_id>", methods=["DELETE"])
+def delete_user(user_id):
+    user, err = get_user_from_token()
+    if err:
+        return err
+    if not user.get("is_admin", False):
+        return jsonify(status="error", message="Forbidden: Admins only"), 403
+    if str(user["_id"]) == user_id:
+        return jsonify(status="error", message="You cannot delete your own user account."), 400
+    result = users.delete_one({"_id": ObjectId(user_id)})
+    if not result.deleted_count:
+        return jsonify(status="error", message="User not found"), 404
+    return jsonify(status="success"), 200
 
 
 if __name__ == "__main__":

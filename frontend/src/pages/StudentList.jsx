@@ -35,7 +35,7 @@ export function StudentList({ onRefresh }) {
     work_description: "",
   });
   const [isAddingSession, setIsAddingSession] = useState(false);
-  const [viewMode, setViewMode] = useState("students"); // "students" or "sessions"
+  const [viewMode, setViewMode] = useState("students");
   const [showAddStudent, setShowAddStudent] = useState(false);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function StudentList({ onRefresh }) {
       setIsSessionsLoading(false);
       return;
     }
-    // Fetch students
+
     fetch(`${API_URL}/students`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -64,7 +64,7 @@ export function StudentList({ onRefresh }) {
         setDeleteError("Failed to fetch students from server.");
         setIsLoading(false);
       });
-    // Fetch sessions collection
+
     fetch(`${API_URL}/sessions`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -107,7 +107,6 @@ export function StudentList({ onRefresh }) {
     return bDate - aDate;
   });
 
-  // Sessions view: group all sessions by date (from sessions collection)
   const sessionsToShow =
     sessions.length > 0
       ? sessions.flatMap((sessionGroup) =>
@@ -127,12 +126,10 @@ export function StudentList({ onRefresh }) {
           }))
         );
 
-  // Filter sessions by search term (student name)
   const filteredSessionsToShow = sessionsToShow.filter((session) =>
     session.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Group filtered sessions by date
   const sessionsByDate = filteredSessionsToShow.reduce((acc, session) => {
     if (!acc[session.date]) acc[session.date] = [];
     acc[session.date].push(session);
@@ -293,7 +290,6 @@ export function StudentList({ onRefresh }) {
 
   return (
     <div className="space-y-4">
-      {/* Top bar: Toggle, Search, Add Student */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex space-x-2">
           <Button
@@ -330,7 +326,7 @@ export function StudentList({ onRefresh }) {
           Add Student
         </Button>
       </div>
-      {/* Search */}
+
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
         <Input
@@ -347,14 +343,12 @@ export function StudentList({ onRefresh }) {
         </Alert>
       )}
 
-      {/* Results count */}
       <div className="text-sm text-gray-600">
         {viewMode === "students"
           ? `Showing ${filteredStudents.length} of ${students.length} students`
           : `Showing ${sessionsToShow.length} sessions`}
       </div>
 
-      {/* Main View */}
       {viewMode === "students" ? (
         <div className="space-y-3">
           {sortedStudents.map((student) => (
@@ -470,7 +464,6 @@ export function StudentList({ onRefresh }) {
             </div>
           ) : (
             sortedSessionDates.map((date) => {
-              // Get unique student names for this date
               const uniqueNames = Array.from(
                 new Set(sessionsByDate[date].map((session) => session.name))
               );
@@ -495,7 +488,7 @@ export function StudentList({ onRefresh }) {
                       </div>
                     ))}
                   </div>
-                  {/* Hide students attended if searching */}
+
                   {searchTerm === "" && (
                     <div className="mt-4 text-right text-sm font-semibold text-blue-800">
                       Students Attended: {uniqueNames.length}
@@ -508,7 +501,6 @@ export function StudentList({ onRefresh }) {
         </div>
       )}
 
-      {/* Edit Modal */}
       {editingStudent && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
           <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
@@ -594,7 +586,6 @@ export function StudentList({ onRefresh }) {
         </div>
       )}
 
-      {/* Add Student Modal */}
       {showAddStudent && (
         <AddStudentForm
           onSuccess={() => {
