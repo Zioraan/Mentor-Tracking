@@ -86,6 +86,7 @@ def login():
     )
 
 
+# protected route to check if user is authorized
 @app.route("/api/authorized", methods=["GET"])
 def authorized():
     user, err = get_user_from_token()
@@ -132,13 +133,13 @@ def add_student():
     session_date = student["first_session"]
     session_student = {
         "name": student["name"],
-        "work_description": student["sessions"][0]["work_description"] if student["sessions"] else "",
+        "work_description": (
+            student["sessions"][0]["work_description"] if student["sessions"] else ""
+        ),
         "added_by": student["sessions"][0]["added_by"] if student["sessions"] else "",
     }
     sessions.update_one(
-        {"date": session_date},
-        {"$push": {"students": session_student}},
-        upsert=True
+        {"date": session_date}, {"$push": {"students": session_student}}, upsert=True
     )
     return jsonify(status="success", student=student), 201
 
@@ -150,9 +151,7 @@ def update_student(student_id):
         return err
     data = request.get_json()
     update_fields = {
-        k: v
-        for k, v in data.items()
-        if k in ["name", "first_session", "sessions"]
+        k: v for k, v in data.items() if k in ["name", "first_session", "sessions"]
     }
     old_student = students.find_one({"_id": ObjectId(student_id)})
     old_name = old_student["name"] if old_student else None
@@ -160,7 +159,9 @@ def update_student(student_id):
     if not result.matched_count:
         return jsonify(status="error", message="Student not found"), 404
     if "sessions" in update_fields and update_fields["sessions"]:
-        if old_student and len(update_fields["sessions"]) > len(old_student.get("sessions", [])):
+        if old_student and len(update_fields["sessions"]) > len(
+            old_student.get("sessions", [])
+        ):
             latest_session = update_fields["sessions"][-1]
             session_student = {
                 "name": data["name"],
@@ -170,13 +171,13 @@ def update_student(student_id):
             sessions.update_one(
                 {"date": latest_session["date"]},
                 {"$push": {"students": session_student}},
-                upsert=True
+                upsert=True,
             )
     if old_name and "name" in update_fields and update_fields["name"] != old_name:
         sessions.update_many(
             {"students.name": old_name},
             {"$set": {"students.$[elem].name": update_fields["name"]}},
-            array_filters=[{"elem.name": old_name}]
+            array_filters=[{"elem.name": old_name}],
         )
     return jsonify(status="success"), 200
 
@@ -192,10 +193,7 @@ def delete_student(student_id):
     if not result.deleted_count:
         return jsonify(status="error", message="Student not found"), 404
     if student_name:
-        sessions.update_many(
-            {},
-            {"$pull": {"students": {"name": student_name}}}
-        )
+        sessions.update_many({}, {"$pull": {"students": {"name": student_name}}})
     return jsonify(status="success"), 200
 
 
@@ -241,6 +239,22 @@ def add_session():
     return jsonify(status="success", session=session), 201
 
 
+# Update session details by session ID
+@app.route("/api/sessions/<session_id>", methods=["PUT"])
+def update_session(session_id):
+    user, err = get_user_from_token()
+    if err:
+        return err
+    data = request.get_json()
+    update_fields = {
+        k: v for k, v in data.items() if k in ["date", "student_id", "notes"]
+    }
+    result = sessions.update_one({"_id": ObjectId(session_id)}, {"$set": update_fields})
+    if not result.matched_count:
+        return jsonify(status="error", message="Session not found"), 404
+    return jsonify(status="success"), 200
+
+
 @app.route("/api/users", methods=["GET"])
 def get_users():
     user, err = get_user_from_token()
@@ -282,7 +296,10 @@ def delete_user(user_id):
     if not user.get("is_admin", False):
         return jsonify(status="error", message="Forbidden: Admins only"), 403
     if str(user["_id"]) == user_id:
-        return jsonify(status="error", message="You cannot delete your own user account."), 400
+        return (
+            jsonify(status="error", message="You cannot delete your own user account."),
+            400,
+        )
     result = users.delete_one({"_id": ObjectId(user_id)})
     if not result.deleted_count:
         return jsonify(status="error", message="User not found"), 404
