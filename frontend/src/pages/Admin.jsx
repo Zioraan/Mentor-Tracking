@@ -94,7 +94,7 @@ export const Admin = () => {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Admin Permissions</h1>
+      <h1 className="text-2xl font-bold mb-4 ">Admin Permissions</h1>
       <table className="min-w-full border">
         <thead>
           <tr>

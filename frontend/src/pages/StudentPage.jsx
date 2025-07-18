@@ -9,34 +9,108 @@ import {
 } from "../components/Card";
 import { User } from "../components/Icons";
 import { Alert, AlertDescription } from "../components/Alert";
+import Modal from "../components/Modal";
 
 export const StudentPage = () => {
   const [student, setStudent] = useState(null);
   const [error, setError] = useState("");
+  const [editingSession, setEditingSession] = useState(null);
+  const [editSessionForm, setEditSessionForm] = useState({
+    date: "",
+    notes: "",
+  });
+  const [showEditSessionModal, setShowEditSessionModal] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
   const { id } = useParams();
   const navigate = useNavigate();
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  useEffect(() => {
-    const fetchStudent = async () => {
-      try {
-        const response = await fetch(`${API_URL}/students/${id}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
+  const fetchStudent = () => {
+    fetch(`${API_URL}/students/${id}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((response) => {
         if (!response.ok) {
-          throw new Error("Failed to fetch student data");
+          return response.text().then((text) => {
+            throw new Error(text || "Failed to fetch student data");
+          });
         }
-        const data = await response.json();
+        return response.json();
+      })
+      .then((data) => {
         setStudent(data.student);
-      } catch (err) {
+      })
+      .catch((err) => {
         setError(err.message);
-      }
-    };
+      });
+  };
+
+  useEffect(() => {
     fetchStudent();
+    // eslint-disable-next-line
   }, [id]);
+
+  const handleEditClick = (session) => {
+    setEditingSession(session);
+    setEditSessionForm({
+      date: session.date,
+      work_description: session.work_description || "",
+    });
+    setEditError("");
+    setShowEditSessionModal(true);
+  };
+
+  const handleEditSessionSubmit = (e) => {
+    e.preventDefault();
+    setEditLoading(true);
+    setEditError("");
+    if (!editingSession || !student || !student.sessions) {
+      setEditError("No session selected for editing.");
+      setEditLoading(false);
+      return;
+    }
+    // Find and update the session in the array
+    const updatedSessions = student.sessions.map((s) =>
+      s._id === editingSession._id
+        ? {
+            ...s,
+            date: editSessionForm.date,
+            work_description: editSessionForm.work_description,
+          }
+        : s
+    );
+    fetch(`${API_URL}/students/${student._id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify({ sessions: updatedSessions }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          setShowEditSessionModal(false);
+          setEditingSession(null);
+          setEditSessionForm({ date: "", notes: "" });
+          fetchStudent();
+          return null;
+        } else {
+          return res.json().then((errData) => {
+            setEditError(errData.message || "Failed to update session");
+          });
+        }
+      })
+      .catch(() => {
+        setEditError("Network error");
+      })
+      .finally(() => {
+        setEditLoading(false);
+      });
+  };
 
   if (error) {
     return (
@@ -81,7 +155,7 @@ export const StudentPage = () => {
                         <button
                           className="ml-4 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
                           onClick={() => {
-                            /* handleEditSession(index) */
+                            handleEditClick(session);
                           }}
                         >
                           Edit
@@ -117,6 +191,69 @@ export const StudentPage = () => {
           </Card>
         </div>
       </div>
+      {/* Edit Session Modal */}
+      {showEditSessionModal && (
+        <Modal
+          onClose={() => {
+            setShowEditSessionModal(false);
+            setEditingSession(null);
+          }}
+        >
+          <form onSubmit={handleEditSessionSubmit} className="p-4">
+            <h2 className="text-lg font-semibold mb-2">Edit Session</h2>
+            <label className="block mb-2">
+              Date:
+              <input
+                type="date"
+                value={editSessionForm.date}
+                onChange={(e) =>
+                  setEditSessionForm({
+                    ...editSessionForm,
+                    date: e.target.value,
+                  })
+                }
+                className="border rounded px-2 py-1 w-full"
+                required
+              />
+            </label>
+            <label className="block mb-2">
+              Work Description:
+              <textarea
+                value={editSessionForm.work_description}
+                onChange={(e) =>
+                  setEditSessionForm({
+                    ...editSessionForm,
+                    work_description: e.target.value,
+                  })
+                }
+                className="border rounded px-2 py-1 w-full"
+                rows={4}
+              />
+            </label>
+            {editError && <div className="text-red-600 mb-2">{editError}</div>}
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                onClick={() => {
+                  setShowEditSessionModal(false);
+                  setEditingSession(null);
+                }}
+                disabled={editLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                disabled={editLoading}
+              >
+                {editLoading ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
       <div className="flex justify-end p-4">
         <button
           onClick={() => navigate("/dashboard")}
