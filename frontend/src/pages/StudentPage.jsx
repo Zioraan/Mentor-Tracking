@@ -73,29 +73,26 @@ export const StudentPage = () => {
       setEditLoading(false);
       return;
     }
-    // Find and update the session in the array
-    const updatedSessions = student.sessions.map((s) =>
-      s._id === editingSession._id
-        ? {
-            ...s,
-            date: editSessionForm.date,
-            work_description: editSessionForm.work_description,
-          }
-        : s
-    );
-    fetch(`${API_URL}/students/${student._id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-      body: JSON.stringify({ sessions: updatedSessions }),
-    })
+
+    fetch(
+      `${API_URL}/students/${student._id}/sessions/${editingSession.session_id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          date: editSessionForm.date,
+          work_description: editSessionForm.work_description,
+        }),
+      }
+    )
       .then((res) => {
         if (res.ok) {
           setShowEditSessionModal(false);
           setEditingSession(null);
-          setEditSessionForm({ date: "", notes: "" });
+          setEditSessionForm({ date: "", work_description: "" });
           fetchStudent();
           return null;
         } else {
@@ -138,7 +135,10 @@ export const StudentPage = () => {
                 .slice()
                 .sort((a, b) => new Date(b.date) - new Date(a.date))
                 .map((session, index) => (
-                  <Card key={index} className="border border-gray-200">
+                  <Card
+                    key={session.session_id || index}
+                    className="border border-gray-200"
+                  >
                     <CardContent>
                       <div className="flex items-center justify-between">
                         <div>
