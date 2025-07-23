@@ -1,18 +1,35 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useActions } from "../../hooks/useActions";
 import { Link, useNavigate } from "react-router-dom";
+import useGlobalReducer from "../../hooks/useGlobalReducer";
 
 export const Login = () => {
   const { handleLogin } = useActions();
+  const { store, dispatch } = useGlobalReducer();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+
+  const [showMessage, setShowMessage] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    if (store.message && store.message.includes("Sign up successful")) {
+      setShowMessage(true);
+      setTimeout(() => {
+        setShowMessage(false);
+        dispatch({ type: "SET_MESSAGE", payload: "" });
+      }, 5000);
+    }
+  }, [store.message, dispatch]);
+
   const handleLoginForm = async (e) => {
     e.preventDefault();
+    setErrorMessage("");
     if (!formData.email || !formData.password) {
-      alert("Please fill in both fields.");
+      setErrorMessage("Please fill in both fields.");
       return;
     }
     const data = await handleLogin(formData);
@@ -21,7 +38,7 @@ export const Login = () => {
       setFormData({ email: "", password: "" });
       navigate("/dashboard");
     } else {
-      alert("Login failed: " + data.message);
+      setErrorMessage(data.message || "Login failed. Please try again.");
       return;
     }
   };
@@ -50,9 +67,10 @@ export const Login = () => {
               id="email"
               className="w-full p-2 border border-gray-300 rounded"
               value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
+              onChange={(e) => {
+                setFormData({ ...formData, email: e.target.value });
+                if (errorMessage) setErrorMessage("");
+              }}
             />
           </div>
           <div className="mb-4">
@@ -64,10 +82,25 @@ export const Login = () => {
               id="password"
               className="w-full p-2 border border-gray-300 rounded"
               value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
+              onChange={(e) => {
+                setFormData({ ...formData, password: e.target.value });
+                if (errorMessage) setErrorMessage(""); 
+              }}
             />
+          </div>
+          <div>
+            {/* success & error messages */}
+            {showMessage && (
+              <div className="w-75 my-4 p-3 text-green-700 rounded text-center">
+                {store.message}
+              </div>
+            )}
+
+            {errorMessage && (
+              <div className="w-75 my-4 p-3 text-red-700 rounded text-center text-center ">
+                {errorMessage}
+              </div>
+            )}
           </div>
           <button
             type="submit"
