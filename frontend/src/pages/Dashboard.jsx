@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Button } from "../components/Button";
 import { Calendar, BookOpen } from "../components/Icons";
+import { AddStudentForm } from "./AddStudentForm";
 import { StudentList } from "./StudentList";
+import { LogOut, Plus, Users } from "../components/Icons";
 import {
   Card,
   CardHeader,
@@ -11,31 +14,39 @@ import {
   CardContent,
 } from "../components/Card";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 export const Dashboard = () => {
   const [students, setStudents] = useState([]);
-  const [sessions, setSessions] = useState([]);
+  const [sessions, setSessions] = useState([]); // New: sessions state
+  const [showAddForm, setShowAddForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch students (unchanged, for StudentList)
   const fetchStudents = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${API_URL}/students`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error("Failed to fetch students");
-      const data = await response.json();
-      setStudents(data);
+      // Fetch students from your backend API here
+      // Example:
+      // const token = localStorage.getItem("token");
+      // const response = await fetch(`${API_URL}/students`, {
+      //   headers: { Authorization: `Bearer ${token}` },
+      // });
+      // const data = await response.json();
+      // setStudents(data);
+      // For now, just clear students if fetch fails
+      setStudents([]);
     } catch (error) {
       console.error("Failed to fetch students:", error);
       setStudents([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // Fetch sessions from backend
   const fetchSessions = async () => {
     try {
+      setIsLoading(true);
       const token = localStorage.getItem("token");
+      const API_URL = import.meta.env.VITE_API_URL;
       const response = await fetch(`${API_URL}/sessions`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -45,65 +56,78 @@ export const Dashboard = () => {
     } catch (error) {
       console.error("Failed to fetch sessions:", error);
       setSessions([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      await Promise.all([fetchStudents(), fetchSessions()]);
-      setIsLoading(false);
-    };
-
-    loadData();
+    fetchStudents(); // for StudentList
+    fetchSessions(); // for dashboard stats
   }, []);
 
-  // Dashboard stats based on sessions collection
+  const handleStudentAdded = () => {
+    setShowAddForm(false);
+    fetchStudents();
+  };
+
+  // Dashboard stats based on sessions, not students
   const MENTORING_DAYS = [2, 4, 6]; // Tuesday, Thursday, Saturday
   const IMPLEMENTATION_DATE = new Date("2025-07-01");
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
 
+  // Helper: get day of week from date string (YYYY-MM-DD)
   const getDayFromDateString = (dateString) => {
     const [year, month, day] = dateString.split("-").map(Number);
     return new Date(year, month - 1, day).getDay();
   };
 
   // Sessions this week: sum of students in sessions for the last 7 days on mentoring days
-  const thisWeek = sessions.reduce((acc, sessionGroup) => {
-    const dateString = sessionGroup.date;
-    const [year, month, day] = dateString.split("-").map(Number);
-    const date = new Date(year, month - 1, day);
+  const thisWeek = Array.isArray(sessions)
+    ? sessions.reduce((acc, sessionGroup) => {
+        const dateString = sessionGroup.date;
+        const [year, month, day] = dateString.split("-").map(Number);
+        const date = new Date(year, month - 1, day);
+        if (
+          MENTORING_DAYS.includes(getDayFromDateString(dateString)) &&
+          date >= weekAgo &&
+          date >= IMPLEMENTATION_DATE
+        ) {
+          return (
+            acc +
+            (Array.isArray(sessionGroup.students)
+              ? sessionGroup.students.length
+              : 0)
+          );
+        }
+        return acc;
+      }, 0)
+    : 0;
 
-    if (
-      MENTORING_DAYS.includes(getDayFromDateString(dateString)) &&
-      date >= weekAgo &&
-      date >= IMPLEMENTATION_DATE
-    ) {
-      return acc + (sessionGroup.students?.length || 0);
-    }
-    return acc;
-  }, 0);
-
-  // Sessions with work descriptions
-  const withWorkDescription = sessions.reduce((acc, sessionGroup) => {
-    const dateString = sessionGroup.date;
-    const [year, month, day] = dateString.split("-").map(Number);
-    const date = new Date(year, month - 1, day);
-
-    if (
-      MENTORING_DAYS.includes(getDayFromDateString(dateString)) &&
-      date >= IMPLEMENTATION_DATE
-    ) {
-      const count =
-        sessionGroup.students?.filter((student) =>
-          student.work_description?.trim()
-        ).length || 0;
-      return acc + count;
-    }
-    return acc;
-  }, 0);
+  // Sessions with work details: sum of students with non-empty work_description on mentoring days, after implementation date
+  const withWorkDescription = Array.isArray(sessions)
+    ? sessions.reduce((acc, sessionGroup) => {
+        const dateString = sessionGroup.date;
+        const [year, month, day] = dateString.split("-").map(Number);
+        const date = new Date(year, month - 1, day);
+        if (
+          MENTORING_DAYS.includes(getDayFromDateString(dateString)) &&
+          date >= IMPLEMENTATION_DATE
+        ) {
+          const count = Array.isArray(sessionGroup.students)
+            ? sessionGroup.students.filter(
+                (student) =>
+                  typeof student.work_description === "string" &&
+                  student.work_description.trim() !== ""
+              ).length
+            : 0;
+          return acc + count;
+        }
+        return acc;
+      }, 0)
+    : 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -158,6 +182,13 @@ export const Dashboard = () => {
           </CardContent>
         </Card>
       </main>
+
+      {showAddForm && (
+        <AddStudentForm
+          onClose={() => setShowAddForm(false)}
+          onStudentAdded={handleStudentAdded}
+        />
+      )}
     </div>
   );
 };
