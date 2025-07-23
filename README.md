@@ -183,6 +183,7 @@ npm run build
 #### Authentication
 - `POST /api/signup` - Register new user
 - `POST /api/login` - User login
+- `GET /api/authorized` - Get protected route
 
 #### Users
 - `GET /api/users` - Get all users
@@ -224,7 +225,6 @@ Mentor-Tracking/
 │   │   └── useActions.jsx      # Action hooks
 │   ├── package.json       # Node.js dependencies
 │   ├── vite.config.js     # Vite configuration
-│   └── tailwind.config.js # Tailwind CSS configuration
 └── README.md              # This file
 ```
 
@@ -235,30 +235,6 @@ Mentor-Tracking/
 - CORS configuration for cross-origin requests
 - Environment variables for sensitive data
 
-## 🚀 Deployment
-
-### Backend Deployment (Example with Heroku)
-
-1. Create `Procfile` in backend directory:
-```
-web: python app.py
-```
-
-2. Deploy to Heroku:
-```bash
-heroku create your-app-name
-git subtree push --prefix backend heroku main
-```
-
-### Frontend Deployment (Example with Netlify)
-
-1. Build the frontend:
-```bash
-cd frontend
-npm run build
-```
-
-2. Deploy the `dist` folder to Netlify or Vercel
 
 ## 🤝 Contributing
 
