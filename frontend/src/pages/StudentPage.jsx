@@ -10,8 +10,10 @@ import {
 import { User } from "../components/Icons";
 import { Alert, AlertDescription } from "../components/Alert";
 import Modal from "../components/Modal";
+import useGlobalReducer from "../../hooks/useGlobalReducer";
 
 export const StudentPage = () => {
+  const { store } = useGlobalReducer();
   const [student, setStudent] = useState(null);
   const [error, setError] = useState("");
   const [editingSession, setEditingSession] = useState(null);
@@ -121,6 +123,10 @@ export const StudentPage = () => {
     return <div>Loading...</div>;
   }
 
+  const isSessionEditable = (session) => {
+    return session.added_by === store.user.name || store.user.is_admin === true;
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -152,14 +158,16 @@ export const StudentPage = () => {
                             <span> | Mentor: {session.added_by}</span>
                           </div>
                         </div>
-                        <button
-                          className="ml-4 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
-                          onClick={() => {
-                            handleEditClick(session);
-                          }}
-                        >
-                          Edit
-                        </button>
+                        {isSessionEditable(session) && (
+                          <button
+                            className="ml-4 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                            onClick={() => {
+                              handleEditClick(session);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

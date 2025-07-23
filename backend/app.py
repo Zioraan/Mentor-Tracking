@@ -97,7 +97,7 @@ def authorized():
         jsonify(
             status="success",
             message="User is authorized",
-            user={"email": user["email"], "name": user["name"]},
+            user={"email": user["email"], "name": user["name"], "is_admin": user.get("is_admin", False)},
         ),
         200,
     )
