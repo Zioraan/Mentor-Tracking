@@ -204,12 +204,9 @@ export function StudentList({ onRefresh }) {
     setIsAddingSession(true);
     setEditingStudent(student);
     setEditForm({
-      name: student.name || "",
-      date_joined: student.date_joined ? student.date_joined.split("T")[0] : "",
-      work_description:
-        typeof student.work_description === "string"
-          ? student.work_description
-          : "",
+      name: student.name,
+      date_joined: "",
+      work_description: "",
     });
   };
 

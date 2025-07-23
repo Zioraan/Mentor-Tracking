@@ -55,6 +55,7 @@ def signup():
         "password": generate_password_hash(data["password"]),
         "name": data["name"],
         "is_authorized": False,
+        "is_admin": False,
     }
     users.insert_one(user)
     return jsonify(status="success", message="User created successfully"), 201
