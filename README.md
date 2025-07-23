@@ -88,7 +88,7 @@ MONGO_URI=mongodb://localhost:27017/mentor-tracking
 
 **Important**: Replace `your-secret-key-here` with a strong, random secret key for JWT token signing.
 
-### 5. Frontend Environment (Optional)
+### 5. Frontend Environment
 
 Create a `.env` file in the `frontend` directory if using a different backend URL:
 
