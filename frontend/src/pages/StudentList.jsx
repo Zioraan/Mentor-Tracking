@@ -29,7 +29,7 @@ export function StudentList({ onRefresh }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [editForm, setEditForm] = useState({
+  const [studentModalForm, setStudentModalForm] = useState({
     name: "",
     date_joined: "",
     work_description: "",
@@ -162,12 +162,15 @@ export function StudentList({ onRefresh }) {
     }
   };
 
-  const handleEdit = (student) => {
+  const handleEditStudent = (student) => {
+    console.log("Editing student:", student);
     setIsAddingSession(false);
     setEditingStudent(student);
-    setEditForm({
+    setStudentModalForm({
       name: student.name || "",
-      date_joined: student.date_joined ? student.date_joined.split("T")[0] : "",
+      date_joined: student.first_session
+        ? student.created_at.split("T")[0]
+        : "",
       work_description:
         typeof student.work_description === "string"
           ? student.work_description
@@ -186,7 +189,7 @@ export function StudentList({ onRefresh }) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name: editForm.name,
+          name: studentModalForm.name,
           first_session: editingStudent.first_session,
           created_at: editingStudent.created_at,
           sessions: editingStudent.sessions,
@@ -201,15 +204,13 @@ export function StudentList({ onRefresh }) {
   };
 
   const handleAddSession = (student) => {
+    console.log("Adding session for student:", student);
     setIsAddingSession(true);
     setEditingStudent(student);
-    setEditForm({
-      name: student.name || "",
-      date_joined: student.date_joined ? student.date_joined.split("T")[0] : "",
-      work_description:
-        typeof student.work_description === "string"
-          ? student.work_description
-          : "",
+    setStudentModalForm({
+      name: student.name,
+      date_joined: "",
+      work_description: "",
     });
   };
 
@@ -228,8 +229,9 @@ export function StudentList({ onRefresh }) {
           sessions: [
             ...editingStudent.sessions,
             {
-              work_description: editForm.work_description,
-              date: editForm.date_joined,
+              session_id: crypto.randomUUID(), // Generate unique session ID
+              work_description: studentModalForm.work_description,
+              date: studentModalForm.date_joined,
               added_by: store.user.name,
             },
           ],
@@ -407,7 +409,7 @@ export function StudentList({ onRefresh }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleEdit(student)}
+                      onClick={() => handleEditStudent(student)}
                       className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                     >
                       <Pencil className="h-4 w-4" />
@@ -423,9 +425,7 @@ export function StudentList({ onRefresh }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        handleAddSession(student);
-                      }}
+                      onClick={() => handleAddSession(student)}
                       className="text-blue-600 hover:text-blue-700 hover:bg-gray-50"
                     >
                       <svg
@@ -500,7 +500,7 @@ export function StudentList({ onRefresh }) {
           )}
         </div>
       )}
-
+      {/* Student Modal Form */}
       {editingStudent && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
           <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
@@ -521,9 +521,12 @@ export function StudentList({ onRefresh }) {
                 </label>
                 <Input
                   id="edit-name"
-                  value={editForm.name}
+                  value={studentModalForm.name}
                   onChange={(e) =>
-                    setEditForm({ ...editForm, name: e.target.value })
+                    setStudentModalForm({
+                      ...studentModalForm,
+                      name: e.target.value,
+                    })
                   }
                   placeholder="Enter name"
                   disabled={isAddingSession ? true : false}
@@ -539,10 +542,14 @@ export function StudentList({ onRefresh }) {
                 <Input
                   id="edit-date"
                   type="date"
-                  value={editForm.date_joined}
+                  value={studentModalForm.date_joined}
                   onChange={(e) =>
-                    setEditForm({ ...editForm, date_joined: e.target.value })
+                    setStudentModalForm({
+                      ...studentModalForm,
+                      date_joined: e.target.value,
+                    })
                   }
+                  required
                   placeholder="YYYY-MM-DD"
                 />
               </div>
@@ -557,10 +564,10 @@ export function StudentList({ onRefresh }) {
 
                   <Input
                     id="edit-work"
-                    value={editForm.work_description}
+                    value={studentModalForm.work_description}
                     onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
+                      setStudentModalForm({
+                        ...studentModalForm,
                         work_description: e.target.value,
                       })
                     }

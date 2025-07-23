@@ -28,6 +28,14 @@ export const AddStudentForm = ({ onSuccess, onCancel }) => {
     setError("");
 
     const formData = new FormData(event.currentTarget);
+    const studentCheck =
+      formData.get("name") === "" || formData.get("date_joined") === "";
+    if (studentCheck) {
+      setError("Missing required fields.");
+      setIsLoading(false);
+      return;
+    }
+
     const studentData = {
       name: formData.get("name"),
       first_session: formData.get("date_joined"),

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson import ObjectId
-import os, jwt, datetime
+import os, jwt, datetime, uuid
 
 load_dotenv()
 app = Flask(__name__)
@@ -55,6 +55,7 @@ def signup():
         "password": generate_password_hash(data["password"]),
         "name": data["name"],
         "is_authorized": False,
+        "is_admin": False,
     }
     users.insert_one(user)
     return jsonify(status="success", message="User created successfully"), 201
@@ -121,10 +122,17 @@ def add_student():
     data = request.get_json()
     if not data.get("name") or not data.get("first_session"):
         return jsonify(status="error", message="Missing required fields"), 400
+
+    # Add unique session_id to each session
+    sessions_with_ids = []
+    for session in data.get("sessions", []):
+        session_with_id = {**session, "session_id": str(uuid.uuid4())}
+        sessions_with_ids.append(session_with_id)
+
     student = {
         "name": data["name"],
         "first_session": data["first_session"],
-        "sessions": data.get("sessions", []),
+        "sessions": sessions_with_ids,
         "created_at": datetime.datetime.utcnow().isoformat(),
     }
     result = students.insert_one(student)
@@ -153,6 +161,17 @@ def update_student(student_id):
     update_fields = {
         k: v for k, v in data.items() if k in ["name", "first_session", "sessions"]
     }
+
+    # Add unique session_id to any sessions that don't have them
+    if "sessions" in update_fields:
+        sessions_with_ids = []
+        for session in update_fields["sessions"]:
+            if "session_id" not in session:
+                session_with_id = {**session, "session_id": str(uuid.uuid4())}
+            else:
+                session_with_id = session
+            sessions_with_ids.append(session_with_id)
+        update_fields["sessions"] = sessions_with_ids
     old_student = students.find_one({"_id": ObjectId(student_id)})
     old_name = old_student["name"] if old_student else None
     result = students.update_one({"_id": ObjectId(student_id)}, {"$set": update_fields})
@@ -209,6 +228,48 @@ def get_student(student_id):
     return jsonify(status="success", student=student), 200
 
 
+@app.route("/api/students/<student_id>/sessions/<session_id>", methods=["PUT"])
+def update_student_session(student_id, session_id):
+    user, err = get_user_from_token()
+    if err:
+        return err
+
+    data = request.get_json()
+    update_fields = {
+        k: v for k, v in data.items() if k in ["date", "work_description", "added_by"]
+    }
+
+    # Find the student
+    student = students.find_one({"_id": ObjectId(student_id)})
+    if not student:
+        return jsonify(status="error", message="Student not found"), 404
+
+    # Find and update the specific session
+    sessions_array = student.get("sessions", [])
+    session_found = False
+
+    for i, session in enumerate(sessions_array):
+        if session.get("session_id") == session_id:
+            # Update only the specified fields
+            for field, value in update_fields.items():
+                sessions_array[i][field] = value
+            session_found = True
+            break
+
+    if not session_found:
+        return jsonify(status="error", message="Session not found"), 404
+
+    # Update the student document with the modified sessions array
+    result = students.update_one(
+        {"_id": ObjectId(student_id)}, {"$set": {"sessions": sessions_array}}
+    )
+
+    if not result.matched_count:
+        return jsonify(status="error", message="Failed to update session"), 500
+
+    return jsonify(status="success"), 200
+
+
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
     user, err = get_user_from_token()
@@ -231,7 +292,7 @@ def add_session():
     session = {
         "date": data["date"],
         "student_id": data["student_id"],
-        "notes": data.get("notes"),
+        "work_description": data["work_description"],
         "created_at": datetime.datetime.utcnow().isoformat(),
     }
     result = sessions.insert_one(session)
@@ -239,7 +300,6 @@ def add_session():
     return jsonify(status="success", session=session), 201
 
 
-# Update session details by session ID
 @app.route("/api/sessions/<session_id>", methods=["PUT"])
 def update_session(session_id):
     user, err = get_user_from_token()

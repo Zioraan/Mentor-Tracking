@@ -2,7 +2,7 @@ import useGlobalReducer from "./useGlobalReducer";
 
 export const useActions = () => {
   const { store, dispatch } = useGlobalReducer();
-  const apiUrl = import.meta.env.VITE_API_URL;
+  const API_URL = import.meta.env.VITE_API_URL;
 
   const test = () => {
     console.log("Test action executed", store.message);
@@ -14,7 +14,7 @@ export const useActions = () => {
 
   const handleSignUp = async (formData) => {
     const { name, email, password } = formData;
-    const response = await fetch(apiUrl + "/signup", {
+    const response = await fetch(API_URL + "/signup", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -40,7 +40,7 @@ export const useActions = () => {
 
   const handleLogin = async (formData) => {
     const { email, password } = formData;
-    const response = await fetch(apiUrl + "/login", {
+    const response = await fetch(API_URL + "/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -72,7 +72,7 @@ export const useActions = () => {
     if (!token) {
       return false;
     }
-    const response = await fetch(apiUrl + "/authorized", {
+    const response = await fetch(API_URL + "/authorized", {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
