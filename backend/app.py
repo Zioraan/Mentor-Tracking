@@ -214,15 +214,11 @@ def get_sessions():
     if err:
         return err
     result = list(sessions.find())
-    private_sessions = []
-    global_sessions = []
+    found_sessions = []
     for session in result:
         session["_id"] = str(session["_id"])
-        if session.get("type_of") == "private":
-            private_sessions.append(session)
-        elif session.get("type_of") == "global":
-            global_sessions.append(session)
-    return jsonify(private_sessions=private_sessions, global_sessions=global_sessions)
+        found_sessions.append(session) 
+    return jsonify(sessions=found_sessions), 200
 
 # Functioning Properly
 @app.route("/api/sessions", methods=["POST"])
