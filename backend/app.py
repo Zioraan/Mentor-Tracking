@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson import ObjectId
-from classes import User, Student, Session
+from classes import User, Student, Session, Day
 import os, jwt, datetime, uuid
 
 load_dotenv()
@@ -21,6 +21,7 @@ db = client["MentorTracking"]
 users = db.users
 students = db.students
 sessions = db.sessions
+days = db.days
 
 
 @app.route("/")
@@ -230,9 +231,10 @@ def add_session():
     required_fields = ["date", "student_id", "work_description", "type_of", "project"]
     if not all(data.get(field) for field in required_fields):
         return jsonify(status="error", message="Missing required fields"), 400
-    student_doc = students.find_one({"_id": ObjectId(data["student_id"])});
+    student_doc = students.find_one({"_id": ObjectId(data["student_id"])})
     if not student_doc:
         return jsonify(status="error", message="Student not found"), 404
+
     session_data = {
         "type_of": data["type_of"],
         "date": data["date"],
@@ -247,15 +249,32 @@ def add_session():
         del session_doc["_id"]
     result = sessions.insert_one(session_doc)
     session_id = str(result.inserted_id)
+
     student_obj = Student.unserialize(student_doc)
     if hasattr(student_obj, "add_session"):
         student_obj.add_session(session_id)
         updated_student_doc = student_obj.serialize()
         if "_id" in updated_student_doc:
             del updated_student_doc["_id"]
-        students.update_one({"_id": ObjectId(data["student_id"])} , {"$set": updated_student_doc})
+        students.update_one({"_id": ObjectId(data["student_id"])}, {"$set": updated_student_doc})
     else:
-        students.update_one({"_id": ObjectId(data["student_id"])} , {"$push": {"personal_sessions": session_id}})
+        students.update_one({"_id": ObjectId(data["student_id"])}, {"$push": {"personal_sessions": session_id}})
+
+    session_obj._id = session_id  
+    day_doc = days.find_one({"date": data["date"]})
+    if day_doc:
+        day_obj = Day.unserialize(day_doc)
+    else:
+        day_obj = Day(date=data["date"])
+    day_obj.add_session_id(session_id, data["type_of"])
+    day_serialized = day_obj.serialize()
+    day_serialized.pop("_id", None)
+    days.update_one(
+        {"date": data["date"]},
+        {"$set": day_serialized},
+        upsert=True
+    )
+
     new_session = sessions.find_one({"_id": result.inserted_id})
     if new_session and "_id" in new_session:
         new_session["_id"] = str(new_session["_id"])
@@ -363,6 +382,45 @@ def delete_user(user_id):
     if not result.deleted_count:
         return jsonify(status="error", message="User not found"), 404
     return jsonify(status="success"), 200
+
+@app.route("/api/days", methods=["GET"])
+def get_days():
+    user, err = get_user_from_token()
+    if err:
+        return err
+    days_list = list(days.find())
+    for day in days_list:
+        day["_id"] = str(day["_id"])
+        # Populate global_sessions with full session docs
+        global_sessions_full = []
+        for sid in day.get("global_sessions", []):
+            try:
+                obj_id = ObjectId(sid)
+            except Exception:
+                obj_id = sid
+            session_doc = sessions.find_one({"_id": obj_id})
+            if session_doc:
+                session_doc["_id"] = str(session_doc["_id"])
+                global_sessions_full.append(session_doc)
+        day["global_sessions"] = global_sessions_full
+
+        # Populate private_sessions with full session docs
+        private_sessions_full = []
+        for sid in day.get("private_sessions", []):
+            try:
+                obj_id = ObjectId(sid)
+            except Exception:
+                obj_id = sid
+            session_doc = sessions.find_one({"_id": obj_id})
+            if session_doc:
+                session_doc["_id"] = str(session_doc["_id"])
+                private_sessions_full.append(session_doc)
+        day["private_sessions"] = private_sessions_full
+
+    return jsonify(status="success", days=days_list), 200
+
+
+    
 
 
 if __name__ == "__main__":

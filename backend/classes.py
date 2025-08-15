@@ -228,14 +228,13 @@ class Session:
 
 class Day:
     def __init__(self, date, _id=None, global_sessions=None, private_sessions=None):
-        if _id:
-            self._id = _id if _id is not None else None
+        self._id = _id if _id is not None else None  # Always set _id
         self.date = date
-        if global_sessions:
+        if global_sessions is not None:
             self.global_sessions = global_sessions
         else:
-            global_sessions = []
-        if private_sessions:
+            self.global_sessions = []
+        if private_sessions is not None:
             self.private_sessions = private_sessions
         else:
             self.private_sessions = []
@@ -259,6 +258,26 @@ class Day:
         else:
             raise ValueError("Session not found in this day")
         
+    def add_session_id(self, session_id, type_of):
+        if type_of == "global":
+            if session_id not in self.global_sessions:
+                self.global_sessions.append(session_id)
+        elif type_of == "private":
+            if session_id not in self.private_sessions:
+                self.private_sessions.append(session_id)
+        else:
+            raise ValueError("Session type must be 'global' or 'private'")
+
+    def remove_session_id(self, session_id, type_of):
+        if type_of == "global":
+            if session_id in self.global_sessions:
+                self.global_sessions.remove(session_id)
+        elif type_of == "private":
+            if session_id in self.private_sessions:
+                self.private_sessions.remove(session_id)
+        else:
+            raise ValueError("Session type must be 'global' or 'private'")
+
     @classmethod
     def unserialize(cls, data):
         return cls(
@@ -271,10 +290,10 @@ class Day:
     def serialize(self):
         data = {
             "date": self.date,
-            "global_sessions": [session.serialize() for session in self.global_sessions],
-            "private_sessions": [session.serialize() for session in self.private_sessions]
+            "global_sessions": self.global_sessions,
+            "private_sessions": self.private_sessions,
         }
-        if self._id is not None:
+        if hasattr(self, "_id") and self._id is not None:
             data["_id"] = str(self._id)
         return data
         

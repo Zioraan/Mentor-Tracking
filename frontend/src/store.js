@@ -2,6 +2,8 @@ export const initialStore = () => {
   return {
     message: "hello world",
     user: null,
+    sessions: [],
+    days: [],
   };
 };
 
@@ -28,6 +30,16 @@ export default function storeReducer(store, action = {}) {
       return {
         ...store,
         user: {},
+      };
+    case "SET_SESSIONS":
+      return {
+        ...store,
+        sessions: action.payload,
+      };
+    case "SET_DAYS":
+      return {
+        ...store,
+        days: action.payload,
       };
   }
 }

@@ -12,6 +12,7 @@ import { StudentList } from "./pages/StudentList";
 import { AddStudentForm } from "./pages/AddStudentForm";
 import { StudentPage } from "./pages/StudentPage";
 import { Admin } from "./pages/Admin";
+import NewDashboard from "./pages/NewDashboard";
 export const router = createBrowserRouter(
   createRoutesFromElements(
     <>
@@ -29,6 +30,7 @@ export const router = createBrowserRouter(
         <Route path="/students/add" element={<AddStudentForm />} />
         <Route path="/students/:id" element={<StudentPage />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/new-dashboard" element={<NewDashboard />} />
       </Route>
     </>
   )

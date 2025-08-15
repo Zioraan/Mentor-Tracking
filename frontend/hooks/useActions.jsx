@@ -97,11 +97,34 @@ export const useActions = () => {
       return false;
     }
   };
+  const formatDate = (dateString) => {
+    const datePart = dateString.split("T")[0];
+    const [year, month, day] = datePart.split("-");
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    return `${monthNames[parseInt(month, 10) - 1]} ${parseInt(
+      day,
+      10
+    )}, ${year}`;
+  };
 
   return {
     test,
     handleSignUp,
     handleLogin,
     handleAuth,
+    formatDate,
   };
 };
